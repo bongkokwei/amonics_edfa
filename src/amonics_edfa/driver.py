@@ -242,3 +242,44 @@ class AEDFA:
     def unlock_interlock(self) -> None:
         """Unlock lasers after an interlock event has cleared."""
         self._set_value("THRES:INTERLOCK:UNLOCK", True)
+
+    def get_alarm_input_loss(self, channel: int, latched: bool = False) -> bool:
+        """Get the loss-of-input-power alarm flag for the specified channel."""
+        self._validate_channel(channel, self.n_power_in_channels, "input power")
+        suffix = ":LATCH" if latched else ""
+        return self._query_bool(f"SENS:THRES:ALARM:POW:IN:LOS:CH{channel}{suffix}")
+
+    def get_alarm_input_over(self, channel: int, latched: bool = False) -> bool:
+        """Get the over-input-power alarm flag for the specified channel."""
+        self._validate_channel(channel, self.n_power_in_channels, "input power")
+        suffix = ":LATCH" if latched else ""
+        return self._query_bool(f"SENS:THRES:ALARM:POW:IN:OVER:CH{channel}{suffix}")
+
+    def get_alarm_current_over(self, latched: bool = False) -> bool:
+        """Get the over-current alarm flag."""
+        suffix = ":LATCH" if latched else ""
+        return self._query_bool(f"SENS:THRES:ALARM:CUR:OVER{suffix}")
+
+    def get_alarm_box_temp(self, latched: bool = False) -> bool:
+        """Get the case-temperature alarm flag."""
+        suffix = ":LATCH" if latched else ""
+        return self._query_bool(f"SENS:THRES:ALARM:TEMP:BOX{suffix}")
+
+    def get_alarm_fibre_chamber(self) -> int:
+        """Get the fibre chamber alarm flag (0=READY, 1=FAIL, 2=OFF)."""
+        return self._query_int("SENS:THRES:ALARM:TEMP:FC")
+
+    def get_alarm_tec_warn(self, latched: bool = False) -> bool:
+        """Get the TEC warning alarm flag."""
+        suffix = ":LATCH" if latched else ""
+        return self._query_bool(f"SENS:THRES:ALARM:TEMP:TEC:WARN{suffix}")
+
+    def get_alarm_tec_over(self, latched: bool = False) -> int:
+        """Get the TEC overheat alarm flag (0=off, >0=alarm on for that channel)."""
+        suffix = ":LATCH" if latched else ""
+        return self._query_int(f"SENS:THRES:ALARM:TEMP:TEC:OVER{suffix}")
+
+    def get_alarm_supply_voltage(self, latched: bool = False) -> bool:
+        """Get the power supply voltage alarm flag."""
+        suffix = ":LATCH" if latched else ""
+        return self._query_bool(f"SENS:THRES:ALARM:VOLT:PS{suffix}")

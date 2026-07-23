@@ -180,3 +180,42 @@ def test_unlock_interlock_sends_expected_command(opened_device, mock_serial):
 def test_get_current_ma_rejects_out_of_range_channel(opened_device):
     with pytest.raises(AEDFACommandError):
         opened_device.get_current_ma(channel=9)
+
+
+@pytest.mark.parametrize(
+    "method_name, args, base_path",
+    [
+        ("get_alarm_input_loss", (1,), "SENS:THRES:ALARM:POW:IN:LOS:CH1"),
+        ("get_alarm_input_over", (1,), "SENS:THRES:ALARM:POW:IN:OVER:CH1"),
+        ("get_alarm_current_over", (), "SENS:THRES:ALARM:CUR:OVER"),
+        ("get_alarm_box_temp", (), "SENS:THRES:ALARM:TEMP:BOX"),
+        ("get_alarm_tec_warn", (), "SENS:THRES:ALARM:TEMP:TEC:WARN"),
+        ("get_alarm_supply_voltage", (), "SENS:THRES:ALARM:VOLT:PS"),
+    ],
+)
+@pytest.mark.parametrize("latched", [False, True])
+def test_latched_alarm_getters_query_expected_path(
+    opened_device, mock_serial, method_name, args, base_path, latched
+):
+    mock_serial.readline.side_effect = [b"1\r\n"]
+    method = getattr(opened_device, method_name)
+    assert method(*args, latched=latched) is True
+    expected_path = base_path + (":LATCH" if latched else "")
+    mock_serial.write.assert_called_with(f":{expected_path}?\r\n".encode("ascii"))
+
+
+def test_get_alarm_fibre_chamber_returns_int(opened_device, mock_serial):
+    mock_serial.readline.side_effect = [b"1\r\n"]
+    assert opened_device.get_alarm_fibre_chamber() == 1
+    mock_serial.write.assert_called_with(b":SENS:THRES:ALARM:TEMP:FC?\r\n")
+
+
+def test_get_alarm_tec_over_returns_int(opened_device, mock_serial):
+    mock_serial.readline.side_effect = [b"1\r\n"]
+    assert opened_device.get_alarm_tec_over() == 1
+    mock_serial.write.assert_called_with(b":SENS:THRES:ALARM:TEMP:TEC:OVER?\r\n")
+
+
+def test_get_alarm_input_loss_rejects_out_of_range_channel(opened_device):
+    with pytest.raises(AEDFACommandError):
+        opened_device.get_alarm_input_loss(channel=9)
