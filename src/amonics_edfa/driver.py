@@ -452,3 +452,19 @@ class AEDFA:
     def set_voltage_alarm_enabled(self, enabled: bool) -> None:
         """Enable or disable the power supply voltage alarm."""
         self._set_value("THRES:VOLT:PS:STAT", enabled)
+
+    def get_usb_current_mode(self) -> int:
+        """Get the USB operating current mode (1=default 0-2A, 3=USB-C 3A)."""
+        return self._query_int("READ:DRIV:PD")
+
+    def get_power_limit_mw(self) -> float:
+        """Get the maximum output power limit (mW)."""
+        return self._query_float("DRIV:LIMIT:POW:OUT:MAX")
+
+    def set_power_limit_mw(self, value: float) -> None:
+        """Set the maximum output power limit (mW)."""
+        self._set_value("DRIV:LIMIT:POW:OUT:MAX", value)
+
+    def get_laser_timer(self) -> str:
+        """Get the cumulative laser operating time, as 'DAY.HOUR:MINUTES:SECOND'."""
+        return self._query_str("READ:DRIV:TIME")
