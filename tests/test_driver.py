@@ -1,6 +1,8 @@
+from unittest.mock import call
+
 import pytest
 
-from amonics_edfa import AEDFA
+from amonics_edfa import AEDFA, ChannelStatus
 from amonics_edfa.exceptions import AEDFACommandError, AEDFAError, AEDFATimeoutError
 
 
@@ -61,3 +63,78 @@ def test_validate_channel_raises_for_out_of_range(opened_device):
 def test_validate_mode_raises_for_unsupported_mode(opened_device):
     with pytest.raises(AEDFACommandError):
         opened_device._validate_mode("APC")
+
+
+def test_get_modes_returns_cached_list(opened_device):
+    assert opened_device.get_modes() == ["ACC"]
+
+
+def test_get_mode_queries_device(opened_device, mock_serial):
+    mock_serial.readline.side_effect = [b"ACC\r\n"]
+    assert opened_device.get_mode(channel=1) == "ACC"
+    mock_serial.write.assert_called_with(b":MODE:SW:CH1?\r\n")
+
+
+def test_set_mode_sends_expected_command(opened_device, mock_serial):
+    opened_device.set_mode("ACC", channel=1)
+    mock_serial.write.assert_called_with(b":MODE:SW:CH1 ACC\r\n")
+
+
+def test_set_mode_rejects_unsupported_mode(opened_device):
+    with pytest.raises(AEDFACommandError):
+        opened_device.set_mode("APC", channel=1)
+
+
+def test_get_current_setpoint_uses_current_mode(opened_device, mock_serial):
+    mock_serial.readline.side_effect = [b"ACC\r\n", b"3.500000e+02\r\n"]
+    assert opened_device.get_current_setpoint(channel=1) == 350.0
+    assert mock_serial.write.call_args_list[-1] == call(b":DRIV:ACC:CUR:CH1?\r\n")
+
+
+def test_set_current_setpoint_sends_expected_command(opened_device, mock_serial):
+    opened_device.set_current_setpoint(channel=1, value_ma=350, mode="ACC")
+    mock_serial.write.assert_called_with(b":DRIV:ACC:CUR:CH1 350\r\n")
+
+
+def test_set_current_setpoint_rejects_out_of_range_channel(opened_device):
+    with pytest.raises(AEDFACommandError):
+        opened_device.set_current_setpoint(channel=9, value_ma=100, mode="ACC")
+
+
+def test_get_current_limits_returns_named_tuple(opened_device, mock_serial):
+    mock_serial.readline.side_effect = [
+        b"0.000000e+00\r\n",
+        b"4.000000e+02\r\n",
+        b"1.000000e+00\r\n",
+        b"1.000000e+02\r\n",
+    ]
+    limits = opened_device.get_current_limits(channel=1, mode="ACC")
+    assert limits.min_ma == 0.0
+    assert limits.max_ma == 400.0
+    assert limits.step_ma == 1.0
+    assert limits.lo_margin_ma == 100.0
+
+
+def test_get_channel_status_returns_enum(opened_device, mock_serial):
+    mock_serial.readline.side_effect = [b"1\r\n"]
+    assert opened_device.get_channel_status(channel=1, mode="ACC") == ChannelStatus.ON
+
+
+def test_set_channel_status_sends_expected_command(opened_device, mock_serial):
+    opened_device.set_channel_status(channel=1, on=True, mode="ACC")
+    mock_serial.write.assert_called_with(b":DRIV:ACC:STAT:CH1 1\r\n")
+
+
+def test_master_enable_sends_expected_command(opened_device, mock_serial):
+    opened_device.master_enable()
+    mock_serial.write.assert_called_with(b":DRIV:MCTRL 1\r\n")
+
+
+def test_master_disable_sends_expected_command(opened_device, mock_serial):
+    opened_device.master_disable()
+    mock_serial.write.assert_called_with(b":DRIV:MCTRL 0\r\n")
+
+
+def test_is_master_enabled_returns_enum(opened_device, mock_serial):
+    mock_serial.readline.side_effect = [b"1\r\n"]
+    assert opened_device.is_master_enabled() == ChannelStatus.ON

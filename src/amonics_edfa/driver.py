@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from collections import namedtuple
 from enum import IntEnum
 
 import serial
@@ -11,6 +12,8 @@ from .exceptions import AEDFACommandError, AEDFAError, AEDFATimeoutError
 from .protocol import build_query, build_set, parse_bool, parse_float, parse_int, parse_str
 
 MIN_COMMAND_INTERVAL_S = 0.05
+
+CurrentLimits = namedtuple("CurrentLimits", ["min_ma", "max_ma", "step_ma", "lo_margin_ma"])
 
 
 class ChannelStatus(IntEnum):
@@ -125,3 +128,68 @@ class AEDFA:
     def _validate_mode(self, mode: str) -> None:
         if mode not in self.modes:
             raise AEDFACommandError(f"Mode {mode!r} not supported (available: {self.modes})")
+
+    def _resolve_mode(self, channel: int, mode: str | None) -> str:
+        resolved = mode if mode is not None else self.get_mode(channel)
+        self._validate_mode(resolved)
+        return resolved
+
+    def get_modes(self) -> list[str]:
+        """Return the laser control modes this device supports (e.g. ['ACC', 'APC'])."""
+        return list(self.modes)
+
+    def get_mode(self, channel: int = 1) -> str:
+        """Get the current laser control mode of the specified channel."""
+        return self._query_str(f"MODE:SW:CH{channel}")
+
+    def set_mode(self, mode: str, channel: int = 1) -> None:
+        """Switch the laser control mode of the specified channel."""
+        self._validate_mode(mode)
+        self._set_value(f"MODE:SW:CH{channel}", mode)
+
+    def get_current_setpoint(self, channel: int, mode: str | None = None) -> float:
+        """Get the driving current set-point (mA) of the specified channel."""
+        self._validate_channel(channel, self.n_driving_channels, "driving")
+        resolved_mode = self._resolve_mode(channel, mode)
+        return self._query_float(f"DRIV:{resolved_mode}:CUR:CH{channel}")
+
+    def set_current_setpoint(self, channel: int, value_ma: float, mode: str | None = None) -> None:
+        """Set the driving current set-point (mA) of the specified channel."""
+        self._validate_channel(channel, self.n_driving_channels, "driving")
+        resolved_mode = self._resolve_mode(channel, mode)
+        self._set_value(f"DRIV:{resolved_mode}:CUR:CH{channel}", value_ma)
+
+    def get_current_limits(self, channel: int, mode: str | None = None) -> CurrentLimits:
+        """Get the min/max/step/low-margin driving current (mA) of the specified channel."""
+        self._validate_channel(channel, self.n_driving_channels, "driving")
+        resolved_mode = self._resolve_mode(channel, mode)
+        return CurrentLimits(
+            min_ma=self._query_float(f"READ:DRIV:MIN:{resolved_mode}:CH{channel}"),
+            max_ma=self._query_float(f"READ:DRIV:MAX:{resolved_mode}:CH{channel}"),
+            step_ma=self._query_float(f"READ:DRIV:STEP:{resolved_mode}:CH{channel}"),
+            lo_margin_ma=self._query_float(f"READ:DRIV:LO_MARGIN:{resolved_mode}:CH{channel}"),
+        )
+
+    def get_channel_status(self, channel: int, mode: str | None = None) -> ChannelStatus:
+        """Get the driving status (OFF/ON/BUSY/LOCK) of the specified channel."""
+        self._validate_channel(channel, self.n_driving_channels, "driving")
+        resolved_mode = self._resolve_mode(channel, mode)
+        return ChannelStatus(self._query_int(f"DRIV:{resolved_mode}:STAT:CH{channel}"))
+
+    def set_channel_status(self, channel: int, on: bool, mode: str | None = None) -> None:
+        """Turn the specified channel's driving on or off."""
+        self._validate_channel(channel, self.n_driving_channels, "driving")
+        resolved_mode = self._resolve_mode(channel, mode)
+        self._set_value(f"DRIV:{resolved_mode}:STAT:CH{channel}", on)
+
+    def master_enable(self) -> None:
+        """Turn the master control switch on, enabling all configured lasers."""
+        self._set_value("DRIV:MCTRL", True)
+
+    def master_disable(self) -> None:
+        """Turn the master control switch off, disabling all lasers."""
+        self._set_value("DRIV:MCTRL", False)
+
+    def is_master_enabled(self) -> ChannelStatus:
+        """Get the master control switch status (OFF/ON/BUSY)."""
+        return ChannelStatus(self._query_int("DRIV:MCTRL"))
