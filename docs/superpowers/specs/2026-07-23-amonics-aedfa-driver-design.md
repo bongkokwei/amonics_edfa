@@ -26,9 +26,8 @@ command syntax, there is no VISA resource layer involved.
 amonics_edfa/
 ├── src/amonics_edfa/
 │   ├── __init__.py       # exports AEDFA, ChannelStatus, AEDFAError, AEDFATimeoutError, AEDFACommandError
-│   ├── driver.py          # AEDFA class — the public API
+│   ├── driver.py          # AEDFA class + ChannelStatus enum — the public API
 │   ├── protocol.py        # command framing + response parsing helpers
-│   ├── enums.py           # ChannelStatus (OFF/ON/BUSY/LOCK)
 │   └── exceptions.py      # AEDFAError, AEDFATimeoutError, AEDFACommandError
 ├── examples/
 │   └── basic_control.py   # straight-line demo script
@@ -118,17 +117,16 @@ Enable/level/range getter+setter pairs, one group per alarm type:
 
 - `get_usb_current_mode() -> int` (1 = default 0–2A, 3 = USB-C 3A)
 - `get_power_limit_mw()` / `set_power_limit_mw(value)`
-- `get_pll_status()` / `set_pll_status()` — documented as device-specific (one Amonics firmware
-  variant only); wrapped since it's a 3-line method, but callers should expect
-  `AEDFACommandError`/timeout on units that don't implement it.
 - `get_laser_timer() -> str` (raw `DAY.HOUR:MINUTES:SECOND` string; no parsing into `timedelta` —
   YAGNI unless a use case needs it)
-- `get_edfa_count() -> int`, `get_active_edfa() -> int`, `set_active_edfa(channel: int) -> None`
-  (`:SWAP:CH*` — thin wrappers, harmless no-ops on the single-channel target hardware, useful if a
-  multi-EDFA rack unit is added later)
 
-Not included: HTTP/web commands (§7) — manual states these are unavailable over a direct
-Ethernet-to-RS232 link, which is the only transport this package targets.
+Not included:
+- PLL status (`:DRIV:PLL:STAT*`) — the manual documents this as exclusive to one unsupported
+  firmware variant; add if a PLL-equipped unit is acquired.
+- EDFA switching (`:SWAP:CH*`) — speculative for the single-channel target hardware; add when a
+  multi-EDFA rack unit is actually in use.
+- HTTP/web commands (§7) — manual states these are unavailable over a direct Ethernet-to-RS232
+  link, which is the only transport this package targets.
 
 ## Data flow
 
