@@ -44,6 +44,7 @@ class AEDFA:
         self.n_box_temp_channels: int = 0
         self.n_fibre_chamber_temp_channels: int = 0
         self.n_tec_channels: int = 0
+        self.n_voltage_channels: int = 0
 
     def open(self) -> None:
         """Open the serial port and discover the device's channel/mode capabilities."""
@@ -73,15 +74,25 @@ class AEDFA:
     def _discover_capabilities(self) -> None:
         self.modes = self._query_str("READ:MODE:NAMES").split()
         self.n_driving_channels = (
-            self._query_int(f"READ:CH:DRIV:{self.modes[0]}") if self.modes else 0
+            self._discover_channel_count(f"READ:CH:DRIV:{self.modes[0]}") if self.modes else 0
         )
-        self.n_current_channels = self._query_int("READ:CH:CUR")
-        self.n_power_in_channels = self._query_int("READ:CH:POW:IN")
-        self.n_power_out_channels = self._query_int("READ:CH:POW:OUT")
-        self.n_pd_channels = self._query_int("READ:CH:POW:PD")
-        self.n_box_temp_channels = self._query_int("READ:CH:TEMP:BOX")
-        self.n_fibre_chamber_temp_channels = self._query_int("READ:CH:TEMP:FC")
-        self.n_tec_channels = self._query_int("READ:CH:TEMP:TEC")
+        self.n_current_channels = self._discover_channel_count("READ:CH:CUR")
+        self.n_power_in_channels = self._discover_channel_count("READ:CH:POW:IN")
+        self.n_power_out_channels = self._discover_channel_count("READ:CH:POW:OUT")
+        self.n_pd_channels = self._discover_channel_count("READ:CH:POW:PD")
+        self.n_box_temp_channels = self._discover_channel_count("READ:CH:TEMP:BOX")
+        self.n_fibre_chamber_temp_channels = self._discover_channel_count("READ:CH:TEMP:FC")
+        self.n_tec_channels = self._discover_channel_count("READ:CH:TEMP:TEC")
+        self.n_voltage_channels = self._discover_channel_count("READ:CH:VOLT:PS")
+
+    def _discover_channel_count(self, path: str) -> int:
+        """Query a READ:CH:* capability count, defaulting to 0 if this device doesn't
+        implement the command — per the manual, not every command is available on
+        every model/firmware."""
+        try:
+            return self._query_int(path)
+        except AEDFATimeoutError:
+            return 0
 
     def _throttle(self) -> None:
         elapsed = time.monotonic() - self._last_write_time

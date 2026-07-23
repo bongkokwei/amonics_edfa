@@ -20,6 +20,8 @@ with AEDFA(port=PORT) as amp:
     print(f"Current channels: {amp.n_current_channels}")
     print(f"Output power channels: {amp.n_power_out_channels}")
     print(f"Laser timer: {amp.get_laser_timer()}")
+    if amp.n_voltage_channels:
+        print(f"Supply voltage: {amp.get_supply_voltage():.2f} V")
 
     for _ in range(POLL_COUNT):
         time.sleep(POLL_INTERVAL_S)
@@ -50,5 +52,7 @@ with AEDFA(port=PORT) as amp:
             print("WARNING: TEC warning alarm")
         if amp.get_alarm_tec_over():
             print("WARNING: TEC overheat alarm")
+        if amp.n_voltage_channels and amp.get_alarm_supply_voltage():
+            print("WARNING: supply voltage alarm")
 
     print("Done.")

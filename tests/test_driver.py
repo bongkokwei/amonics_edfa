@@ -4,6 +4,7 @@ import pytest
 
 from amonics_edfa import AEDFA, ChannelStatus
 from amonics_edfa.exceptions import AEDFACommandError, AEDFAError, AEDFATimeoutError
+from conftest import DISCOVERY_RESPONSES
 
 
 def test_open_discovers_capabilities(opened_device):
@@ -16,6 +17,7 @@ def test_open_discovers_capabilities(opened_device):
     assert opened_device.n_box_temp_channels == 1
     assert opened_device.n_fibre_chamber_temp_channels == 1
     assert opened_device.n_tec_channels == 2
+    assert opened_device.n_voltage_channels == 1
 
 
 def test_open_sends_expected_discovery_queries(mock_serial):
@@ -32,7 +34,20 @@ def test_open_sends_expected_discovery_queries(mock_serial):
         b":READ:CH:TEMP:BOX?\r\n",
         b":READ:CH:TEMP:FC?\r\n",
         b":READ:CH:TEMP:TEC?\r\n",
+        b":READ:CH:VOLT:PS?\r\n",
     ]
+
+
+def test_open_defaults_unsupported_capability_to_zero(mock_serial):
+    """Some models don't implement every READ:CH:* command (e.g. an older unit with
+    no voltage sensing); discovery should default that count to 0 rather than
+    raising and blocking open() entirely."""
+    responses = list(DISCOVERY_RESPONSES)
+    responses[-1] = b""  # READ:CH:VOLT:PS times out on this device
+    mock_serial.readline.side_effect = responses
+    device = AEDFA(port="COM8")
+    device.open()
+    assert device.n_voltage_channels == 0
 
 
 def test_context_manager_closes_serial(mock_serial):

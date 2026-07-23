@@ -14,6 +14,7 @@ DISCOVERY_RESPONSES = [
     b"1\r\n",
     b"1\r\n",
     b"2\r\n",
+    b"1\r\n",
 ]
 
 
