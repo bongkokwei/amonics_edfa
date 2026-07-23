@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
 )
 from serial.tools import list_ports
 
-from .driver import AEDFA
+from .driver import AEDFA, ChannelStatus
 from .exceptions import AEDFAError
 
 
@@ -29,6 +29,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Amonics AEDFA - ACC/APC Mode")
         self.amp: AEDFA | None = None
+        self.output_enabled = False
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -80,6 +81,15 @@ class MainWindow(QMainWindow):
         setpoint_row.addWidget(self.set_setpoint_button)
         layout.addLayout(setpoint_row)
 
+        output_row = QHBoxLayout()
+        self.output_button = QPushButton("Enable Output")
+        self.output_button.clicked.connect(self.toggle_output)
+        self.output_button.setEnabled(False)
+        output_row.addWidget(self.output_button)
+        self.output_status_label = QLabel("Output: --")
+        output_row.addWidget(self.output_status_label)
+        layout.addLayout(output_row)
+
         readings_row = QHBoxLayout()
         readings_row.addWidget(QLabel("Current (mA):"))
         self.current_label = QLabel("--")
@@ -116,8 +126,10 @@ class MainWindow(QMainWindow):
             self.apply_button.setEnabled(True)
             self.set_setpoint_button.setEnabled(True)
             self.refresh_readings_button.setEnabled(True)
+            self.output_button.setEnabled(True)
             self.refresh_mode()
             self.refresh_readings()
+            self.refresh_output_status()
         else:
             self.amp.close()
             self.amp = None
@@ -125,6 +137,10 @@ class MainWindow(QMainWindow):
             self.apply_button.setEnabled(False)
             self.set_setpoint_button.setEnabled(False)
             self.refresh_readings_button.setEnabled(False)
+            self.output_button.setEnabled(False)
+            self.output_button.setText("Enable Output")
+            self.output_status_label.setText("Output: --")
+            self.output_enabled = False
             self.current_label.setText("--")
             self.power_label.setText("--")
             self.status_label.setText("Not connected")
@@ -161,6 +177,34 @@ class MainWindow(QMainWindow):
             )
         except AEDFAError as exc:
             QMessageBox.critical(self, "Setpoint failed", str(exc))
+
+    def toggle_output(self) -> None:
+        if self.amp is None:
+            return
+        channel = self.channel_spin.value()
+        try:
+            if self.output_enabled:
+                self.amp.master_disable()
+                self.amp.set_channel_status(channel=channel, on=False)
+            else:
+                self.amp.set_channel_status(channel=channel, on=True)
+                self.amp.master_enable()
+        except AEDFAError as exc:
+            QMessageBox.critical(self, "Output control failed", str(exc))
+            return
+        self.refresh_output_status()
+
+    def refresh_output_status(self) -> None:
+        if self.amp is None:
+            return
+        try:
+            status = self.amp.get_channel_status(channel=self.channel_spin.value())
+        except AEDFAError as exc:
+            QMessageBox.critical(self, "Read failed", str(exc))
+            return
+        self.output_enabled = status == ChannelStatus.ON
+        self.output_button.setText("Disable Output" if self.output_enabled else "Enable Output")
+        self.output_status_label.setText(f"Output: {status.name}")
 
     def refresh_readings(self) -> None:
         if self.amp is None:
