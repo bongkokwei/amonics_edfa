@@ -193,3 +193,52 @@ class AEDFA:
     def is_master_enabled(self) -> ChannelStatus:
         """Get the master control switch status (OFF/ON/BUSY)."""
         return ChannelStatus(self._query_int("DRIV:MCTRL"))
+
+    def get_current_ma(self, channel: int) -> float:
+        """Get the existing current (mA) of the specified channel."""
+        self._validate_channel(channel, self.n_current_channels, "current")
+        return self._query_float(f"SENS:CUR:CH{channel}")
+
+    def get_input_power_mw(self, channel: int) -> float:
+        """Get the existing input power (mW) of the specified channel."""
+        self._validate_channel(channel, self.n_power_in_channels, "input power")
+        return self._query_float(f"SENS:POW:IN:CH{channel}")
+
+    def get_output_power_mw(self, channel: int) -> float:
+        """Get the existing output power (mW) of the specified channel."""
+        self._validate_channel(channel, self.n_power_out_channels, "output power")
+        return self._query_float(f"SENS:POW:OUT:CH{channel}")
+
+    def get_pd_power_mw(self, channel: int) -> float:
+        """Get the existing internal photodiode power (mW) of the specified channel."""
+        self._validate_channel(channel, self.n_pd_channels, "photodiode")
+        return self._query_float(f"SENS:POW:PD:CH{channel}")
+
+    def get_box_temp_degc(self) -> float:
+        """Get the existing case temperature (deg C)."""
+        return self._query_float("SENS:TEMP:BOX")
+
+    def get_fibre_chamber_temp_degc(self) -> float:
+        """Get the existing fibre chamber temperature (deg C)."""
+        return self._query_float("SENS:TEMP:FC")
+
+    def get_tec_temp_degc(self, channel: int) -> float:
+        """Get the existing pump TEC temperature (deg C) of the specified channel."""
+        self._validate_channel(channel, self.n_tec_channels, "TEC")
+        return self._query_float(f"SENS:TEMP:TEC:CH{channel}")
+
+    def get_supply_voltage(self) -> float:
+        """Get the existing power supply voltage (V)."""
+        return self._query_float("SENS:VOLT:PS")
+
+    def get_seed_stabilising(self) -> bool:
+        """Check whether seed power is still stabilising (True) or stable (False)."""
+        return self._query_bool("DRIV:SEED_ST")
+
+    def get_interlock(self) -> bool:
+        """Check whether the interlock is active (lasers locked)."""
+        return self._query_bool("DRIV:INTERLOCK")
+
+    def unlock_interlock(self) -> None:
+        """Unlock lasers after an interlock event has cleared."""
+        self._set_value("THRES:INTERLOCK:UNLOCK", True)

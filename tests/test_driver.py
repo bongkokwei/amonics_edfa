@@ -138,3 +138,45 @@ def test_master_disable_sends_expected_command(opened_device, mock_serial):
 def test_is_master_enabled_returns_enum(opened_device, mock_serial):
     mock_serial.readline.side_effect = [b"1\r\n"]
     assert opened_device.is_master_enabled() == ChannelStatus.ON
+
+
+@pytest.mark.parametrize(
+    "method_name, args, expected_query, response, expected_value",
+    [
+        ("get_current_ma", (1,), b":SENS:CUR:CH1?\r\n", b"7.180000e+02\r\n", 718.0),
+        ("get_input_power_mw", (1,), b":SENS:POW:IN:CH1?\r\n", b"9.010000e+02\r\n", 901.0),
+        ("get_output_power_mw", (1,), b":SENS:POW:OUT:CH1?\r\n", b"3.060000e+02\r\n", 306.0),
+        ("get_pd_power_mw", (1,), b":SENS:POW:PD:CH1?\r\n", b"9.010000e+02\r\n", 901.0),
+        ("get_box_temp_degc", (), b":SENS:TEMP:BOX?\r\n", b"3.131733e+01\r\n", 31.31733),
+        ("get_fibre_chamber_temp_degc", (), b":SENS:TEMP:FC?\r\n", b"3.131733e+01\r\n", 31.31733),
+        ("get_tec_temp_degc", (1,), b":SENS:TEMP:TEC:CH1?\r\n", b"2.417492e+01\r\n", 24.17492),
+        ("get_supply_voltage", (), b":SENS:VOLT:PS?\r\n", b"5.217492e+00\r\n", 5.217492),
+    ],
+)
+def test_sensor_getters_query_and_parse_correctly(
+    opened_device, mock_serial, method_name, args, expected_query, response, expected_value
+):
+    mock_serial.readline.side_effect = [response]
+    method = getattr(opened_device, method_name)
+    assert method(*args) == pytest.approx(expected_value)
+    mock_serial.write.assert_called_with(expected_query)
+
+
+def test_get_seed_stabilising_true(opened_device, mock_serial):
+    mock_serial.readline.side_effect = [b"1\r\n"]
+    assert opened_device.get_seed_stabilising() is True
+
+
+def test_get_interlock_true(opened_device, mock_serial):
+    mock_serial.readline.side_effect = [b"1\r\n"]
+    assert opened_device.get_interlock() is True
+
+
+def test_unlock_interlock_sends_expected_command(opened_device, mock_serial):
+    opened_device.unlock_interlock()
+    mock_serial.write.assert_called_with(b":THRES:INTERLOCK:UNLOCK 1\r\n")
+
+
+def test_get_current_ma_rejects_out_of_range_channel(opened_device):
+    with pytest.raises(AEDFACommandError):
+        opened_device.get_current_ma(channel=9)
