@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .exceptions import AEDFAProtocolError
+
 
 def _format_value(value: bool | int | float | str) -> str:
     if isinstance(value, bool):
@@ -24,12 +26,20 @@ def build_set(path: str, value: bool | int | float | str) -> bytes:
 
 def parse_float(raw: str) -> float:
     """Parse a decimal or scientific-notation response, e.g. '3.060000e+02\\r\\n' -> 306.0."""
-    return float(raw.strip())
+    stripped = raw.strip()
+    try:
+        return float(stripped)
+    except ValueError as exc:
+        raise AEDFAProtocolError(f"Expected a decimal number, got {stripped!r}") from exc
 
 
 def parse_int(raw: str) -> int:
     """Parse a base-10 integer response, e.g. '2\\r\\n' -> 2."""
-    return int(raw.strip())
+    stripped = raw.strip()
+    try:
+        return int(stripped)
+    except ValueError as exc:
+        raise AEDFAProtocolError(f"Expected an integer, got {stripped!r}") from exc
 
 
 def parse_bool(raw: str) -> bool:

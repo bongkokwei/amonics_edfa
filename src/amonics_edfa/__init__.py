@@ -1,7 +1,7 @@
 """Python driver for Amonics AEDFA erbium-doped fibre amplifiers."""
 
 from .driver import AEDFA, ChannelStatus
-from .exceptions import AEDFACommandError, AEDFAError, AEDFATimeoutError
+from .exceptions import AEDFACommandError, AEDFAError, AEDFAProtocolError, AEDFATimeoutError
 
 __all__ = [
     "AEDFA",
@@ -9,4 +9,5 @@ __all__ = [
     "AEDFAError",
     "AEDFATimeoutError",
     "AEDFACommandError",
+    "AEDFAProtocolError",
 ]

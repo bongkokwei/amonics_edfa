@@ -9,7 +9,7 @@ connected and without changing any device state.
 """
 
 from amonics_edfa import AEDFA
-from amonics_edfa.exceptions import AEDFACommandError, AEDFATimeoutError
+from amonics_edfa.exceptions import AEDFACommandError, AEDFAProtocolError, AEDFATimeoutError
 
 PORT = "COM13"
 CHANNEL = 1
@@ -21,6 +21,8 @@ def probe(label: str, fn) -> None:
         print(f"  OK    {label}: {value!r}")
     except AEDFATimeoutError:
         print(f"  NO REPLY  {label} (not supported on this device)")
+    except AEDFAProtocolError as exc:
+        print(f"  BAD REPLY {label} ({exc})")
     except AEDFACommandError as exc:
         print(f"  N/A   {label} ({exc})")
 
@@ -104,8 +106,6 @@ with AEDFA(port=PORT) as amp:
     probe("get_voltage_alarm_enabled", amp.get_voltage_alarm_enabled)
 
     print("\nExtras:")
-    probe("get_usb_current_mode", amp.get_usb_current_mode)
     probe("get_power_limit_mw", amp.get_power_limit_mw)
-    probe("get_laser_timer", amp.get_laser_timer)
 
     print("\nDone.")

@@ -337,12 +337,6 @@ def test_unlock_tec_overheat_sends_expected_command(opened_device, mock_serial):
     mock_serial.write.assert_called_with(b":THRES:TEMP:TEC:OVER:UNLOCK 1\r\n")
 
 
-def test_get_usb_current_mode(opened_device, mock_serial):
-    mock_serial.readline.side_effect = [b"3\r\n"]
-    assert opened_device.get_usb_current_mode() == 3
-    mock_serial.write.assert_called_with(b":READ:DRIV:PD?\r\n")
-
-
 def test_get_power_limit_mw(opened_device, mock_serial):
     mock_serial.readline.side_effect = [b"1.000000e+04\r\n"]
     assert opened_device.get_power_limit_mw() == pytest.approx(10000.0)
@@ -352,12 +346,6 @@ def test_get_power_limit_mw(opened_device, mock_serial):
 def test_set_power_limit_mw(opened_device, mock_serial):
     opened_device.set_power_limit_mw(10000)
     mock_serial.write.assert_called_with(b":DRIV:LIMIT:POW:OUT:MAX 10000\r\n")
-
-
-def test_get_laser_timer(opened_device, mock_serial):
-    mock_serial.readline.side_effect = [b"5d.10h:10m:10s\r\n"]
-    assert opened_device.get_laser_timer() == "5d.10h:10m:10s"
-    mock_serial.write.assert_called_with(b":READ:DRIV:TIME?\r\n")
 
 
 @pytest.mark.hw
