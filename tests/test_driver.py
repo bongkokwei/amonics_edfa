@@ -4,6 +4,7 @@ import pytest
 
 from amonics_edfa import AEDFA, ChannelStatus
 from amonics_edfa.exceptions import AEDFACommandError, AEDFAError, AEDFATimeoutError
+from conftest import DISCOVERY_RESPONSES
 
 
 def test_open_discovers_capabilities(opened_device):
@@ -37,6 +38,18 @@ def test_open_sends_expected_discovery_queries(mock_serial):
     ]
 
 
+def test_open_defaults_unsupported_capability_to_zero(mock_serial):
+    """Some models don't implement every READ:CH:* command (e.g. an older unit with
+    no voltage sensing); discovery should default that count to 0 rather than
+    raising and blocking open() entirely."""
+    responses = list(DISCOVERY_RESPONSES)
+    responses[-1] = b""  # READ:CH:VOLT:PS times out on this device
+    mock_serial.readline.side_effect = responses
+    device = AEDFA(port="COM8")
+    device.open()
+    assert device.n_voltage_channels == 0
+
+
 def test_context_manager_closes_serial(mock_serial):
     with AEDFA(port="COM8"):
         pass
@@ -63,6 +76,30 @@ def test_validate_channel_raises_for_out_of_range(opened_device):
 def test_validate_mode_raises_for_unsupported_mode(opened_device):
     with pytest.raises(AEDFACommandError):
         opened_device._validate_mode("APC")
+
+
+def test_validate_supported_raises_when_capability_absent(opened_device):
+    with pytest.raises(AEDFACommandError):
+        opened_device._validate_supported(0, "Fibre chamber temperature sensor")
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    ["get_box_temp_degc", "get_fibre_chamber_temp_degc", "get_supply_voltage"],
+)
+def test_unsupported_single_value_sensor_raises_command_error(mock_serial, method_name):
+    """On a device that doesn't implement a given sensor (capability count discovered as
+    0), the getter should raise AEDFACommandError rather than attempt a query the device
+    won't reply to."""
+    responses = list(DISCOVERY_RESPONSES)
+    responses[6] = b""  # READ:CH:TEMP:BOX times out -> n_box_temp_channels = 0
+    responses[7] = b""  # READ:CH:TEMP:FC times out -> n_fibre_chamber_temp_channels = 0
+    responses[-1] = b""  # READ:CH:VOLT:PS times out -> n_voltage_channels = 0
+    mock_serial.readline.side_effect = responses
+    device = AEDFA(port="COM8")
+    device.open()
+    with pytest.raises(AEDFACommandError):
+        getattr(device, method_name)()
 
 
 def test_get_modes_returns_cached_list(opened_device):
@@ -300,12 +337,6 @@ def test_unlock_tec_overheat_sends_expected_command(opened_device, mock_serial):
     mock_serial.write.assert_called_with(b":THRES:TEMP:TEC:OVER:UNLOCK 1\r\n")
 
 
-def test_get_usb_current_mode(opened_device, mock_serial):
-    mock_serial.readline.side_effect = [b"3\r\n"]
-    assert opened_device.get_usb_current_mode() == 3
-    mock_serial.write.assert_called_with(b":READ:DRIV:PD?\r\n")
-
-
 def test_get_power_limit_mw(opened_device, mock_serial):
     mock_serial.readline.side_effect = [b"1.000000e+04\r\n"]
     assert opened_device.get_power_limit_mw() == pytest.approx(10000.0)
@@ -315,12 +346,6 @@ def test_get_power_limit_mw(opened_device, mock_serial):
 def test_set_power_limit_mw(opened_device, mock_serial):
     opened_device.set_power_limit_mw(10000)
     mock_serial.write.assert_called_with(b":DRIV:LIMIT:POW:OUT:MAX 10000\r\n")
-
-
-def test_get_laser_timer(opened_device, mock_serial):
-    mock_serial.readline.side_effect = [b"5d.10h:10m:10s\r\n"]
-    assert opened_device.get_laser_timer() == "5d.10h:10m:10s"
-    mock_serial.write.assert_called_with(b":READ:DRIV:TIME?\r\n")
 
 
 @pytest.mark.hw

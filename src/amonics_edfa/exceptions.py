@@ -11,3 +11,7 @@ class AEDFATimeoutError(AEDFAError):
 
 class AEDFACommandError(AEDFAError):
     """Raised when a command references a channel or mode the device does not support."""
+
+
+class AEDFAProtocolError(AEDFAError):
+    """Raised when the device replies, but the reply doesn't match the expected format."""

@@ -8,7 +8,7 @@ from enum import IntEnum
 
 import serial
 
-from .exceptions import AEDFACommandError, AEDFAError, AEDFATimeoutError
+from .exceptions import AEDFACommandError, AEDFAError, AEDFAProtocolError, AEDFATimeoutError
 from .protocol import build_query, build_set, parse_bool, parse_float, parse_int, parse_str
 
 MIN_COMMAND_INTERVAL_S = 0.05
@@ -74,16 +74,26 @@ class AEDFA:
     def _discover_capabilities(self) -> None:
         self.modes = self._query_str("READ:MODE:NAMES").split()
         self.n_driving_channels = (
-            self._query_int(f"READ:CH:DRIV:{self.modes[0]}") if self.modes else 0
+            self._discover_channel_count(f"READ:CH:DRIV:{self.modes[0]}") if self.modes else 0
         )
-        self.n_current_channels = self._query_int("READ:CH:CUR")
-        self.n_power_in_channels = self._query_int("READ:CH:POW:IN")
-        self.n_power_out_channels = self._query_int("READ:CH:POW:OUT")
-        self.n_pd_channels = self._query_int("READ:CH:POW:PD")
-        self.n_box_temp_channels = self._query_int("READ:CH:TEMP:BOX")
-        self.n_fibre_chamber_temp_channels = self._query_int("READ:CH:TEMP:FC")
-        self.n_tec_channels = self._query_int("READ:CH:TEMP:TEC")
-        self.n_voltage_channels = self._query_int("READ:CH:VOLT:PS")
+        self.n_current_channels = self._discover_channel_count("READ:CH:CUR")
+        self.n_power_in_channels = self._discover_channel_count("READ:CH:POW:IN")
+        self.n_power_out_channels = self._discover_channel_count("READ:CH:POW:OUT")
+        self.n_pd_channels = self._discover_channel_count("READ:CH:POW:PD")
+        self.n_box_temp_channels = self._discover_channel_count("READ:CH:TEMP:BOX")
+        self.n_fibre_chamber_temp_channels = self._discover_channel_count("READ:CH:TEMP:FC")
+        self.n_tec_channels = self._discover_channel_count("READ:CH:TEMP:TEC")
+        self.n_voltage_channels = self._discover_channel_count("READ:CH:VOLT:PS")
+
+    def _discover_channel_count(self, path: str) -> int:
+        """Query a READ:CH:* capability count, defaulting to 0 if this device doesn't
+        implement the command — per the manual, not every command is available on
+        every model/firmware. Some models signal an unsupported command with a garbled
+        non-numeric reply rather than staying silent, so both failure modes count."""
+        try:
+            return self._query_int(path)
+        except (AEDFATimeoutError, AEDFAProtocolError):
+            return 0
 
     def _throttle(self) -> None:
         elapsed = time.monotonic() - self._last_write_time
@@ -124,6 +134,10 @@ class AEDFA:
             raise AEDFACommandError(
                 f"{label} channel {channel} not available on this device (has {count})"
             )
+
+    def _validate_supported(self, count: int, label: str) -> None:
+        if count < 1:
+            raise AEDFACommandError(f"{label} not available on this device")
 
     def _validate_mode(self, mode: str) -> None:
         if mode not in self.modes:
@@ -216,10 +230,14 @@ class AEDFA:
 
     def get_box_temp_degc(self) -> float:
         """Get the existing case temperature (deg C)."""
+        self._validate_supported(self.n_box_temp_channels, "Case temperature sensor")
         return self._query_float("SENS:TEMP:BOX")
 
     def get_fibre_chamber_temp_degc(self) -> float:
         """Get the existing fibre chamber temperature (deg C)."""
+        self._validate_supported(
+            self.n_fibre_chamber_temp_channels, "Fibre chamber temperature sensor"
+        )
         return self._query_float("SENS:TEMP:FC")
 
     def get_tec_temp_degc(self, channel: int) -> float:
@@ -229,6 +247,7 @@ class AEDFA:
 
     def get_supply_voltage(self) -> float:
         """Get the existing power supply voltage (V)."""
+        self._validate_supported(self.n_voltage_channels, "Supply voltage sensor")
         return self._query_float("SENS:VOLT:PS")
 
     def get_seed_stabilising(self) -> bool:
@@ -453,10 +472,6 @@ class AEDFA:
         """Enable or disable the power supply voltage alarm."""
         self._set_value("THRES:VOLT:PS:STAT", enabled)
 
-    def get_usb_current_mode(self) -> int:
-        """Get the USB operating current mode (1=default 0-2A, 3=USB-C 3A)."""
-        return self._query_int("READ:DRIV:PD")
-
     def get_power_limit_mw(self) -> float:
         """Get the maximum output power limit (mW)."""
         return self._query_float("DRIV:LIMIT:POW:OUT:MAX")
@@ -464,7 +479,3 @@ class AEDFA:
     def set_power_limit_mw(self, value: float) -> None:
         """Set the maximum output power limit (mW)."""
         self._set_value("DRIV:LIMIT:POW:OUT:MAX", value)
-
-    def get_laser_timer(self) -> str:
-        """Get the cumulative laser operating time, as 'DAY.HOUR:MINUTES:SECOND'."""
-        return self._query_str("READ:DRIV:TIME")

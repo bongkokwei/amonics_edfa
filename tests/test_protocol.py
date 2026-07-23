@@ -1,3 +1,6 @@
+import pytest
+
+from amonics_edfa.exceptions import AEDFAProtocolError
 from amonics_edfa.protocol import (
     build_query,
     build_set,
@@ -34,6 +37,18 @@ def test_parse_float_from_scientific_notation():
 
 def test_parse_int():
     assert parse_int("2\r\n") == 2
+
+
+def test_parse_float_raises_protocol_error_on_non_numeric_reply():
+    """Some devices echo a fragment of an unrecognised command (e.g. "READ") instead of
+    timing out; that must not leak a raw ValueError."""
+    with pytest.raises(AEDFAProtocolError):
+        parse_float("READ\r\n")
+
+
+def test_parse_int_raises_protocol_error_on_non_numeric_reply():
+    with pytest.raises(AEDFAProtocolError):
+        parse_int("READ\r\n")
 
 
 def test_parse_bool_true():
