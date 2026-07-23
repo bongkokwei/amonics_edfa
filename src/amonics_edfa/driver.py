@@ -134,6 +134,10 @@ class AEDFA:
                 f"{label} channel {channel} not available on this device (has {count})"
             )
 
+    def _validate_supported(self, count: int, label: str) -> None:
+        if count < 1:
+            raise AEDFACommandError(f"{label} not available on this device")
+
     def _validate_mode(self, mode: str) -> None:
         if mode not in self.modes:
             raise AEDFACommandError(f"Mode {mode!r} not supported (available: {self.modes})")
@@ -225,10 +229,14 @@ class AEDFA:
 
     def get_box_temp_degc(self) -> float:
         """Get the existing case temperature (deg C)."""
+        self._validate_supported(self.n_box_temp_channels, "Case temperature sensor")
         return self._query_float("SENS:TEMP:BOX")
 
     def get_fibre_chamber_temp_degc(self) -> float:
         """Get the existing fibre chamber temperature (deg C)."""
+        self._validate_supported(
+            self.n_fibre_chamber_temp_channels, "Fibre chamber temperature sensor"
+        )
         return self._query_float("SENS:TEMP:FC")
 
     def get_tec_temp_degc(self, channel: int) -> float:
@@ -238,6 +246,7 @@ class AEDFA:
 
     def get_supply_voltage(self) -> float:
         """Get the existing power supply voltage (V)."""
+        self._validate_supported(self.n_voltage_channels, "Supply voltage sensor")
         return self._query_float("SENS:VOLT:PS")
 
     def get_seed_stabilising(self) -> bool:

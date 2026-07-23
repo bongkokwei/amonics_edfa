@@ -78,6 +78,30 @@ def test_validate_mode_raises_for_unsupported_mode(opened_device):
         opened_device._validate_mode("APC")
 
 
+def test_validate_supported_raises_when_capability_absent(opened_device):
+    with pytest.raises(AEDFACommandError):
+        opened_device._validate_supported(0, "Fibre chamber temperature sensor")
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    ["get_box_temp_degc", "get_fibre_chamber_temp_degc", "get_supply_voltage"],
+)
+def test_unsupported_single_value_sensor_raises_command_error(mock_serial, method_name):
+    """On a device that doesn't implement a given sensor (capability count discovered as
+    0), the getter should raise AEDFACommandError rather than attempt a query the device
+    won't reply to."""
+    responses = list(DISCOVERY_RESPONSES)
+    responses[6] = b""  # READ:CH:TEMP:BOX times out -> n_box_temp_channels = 0
+    responses[7] = b""  # READ:CH:TEMP:FC times out -> n_fibre_chamber_temp_channels = 0
+    responses[-1] = b""  # READ:CH:VOLT:PS times out -> n_voltage_channels = 0
+    mock_serial.readline.side_effect = responses
+    device = AEDFA(port="COM8")
+    device.open()
+    with pytest.raises(AEDFACommandError):
+        getattr(device, method_name)()
+
+
 def test_get_modes_returns_cached_list(opened_device):
     assert opened_device.get_modes() == ["ACC"]
 
