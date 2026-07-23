@@ -219,3 +219,82 @@ def test_get_alarm_tec_over_returns_int(opened_device, mock_serial):
 def test_get_alarm_input_loss_rejects_out_of_range_channel(opened_device):
     with pytest.raises(AEDFACommandError):
         opened_device.get_alarm_input_loss(channel=9)
+
+
+BOOL_CONFIG_PAIRS = [
+    ("get_ipd_enabled", "set_ipd_enabled", "THRES:POW:IN:STAT:SET1"),
+    ("get_opd_enabled", "set_opd_enabled", "THRES:POW:OUT:STAT:SET1"),
+    ("get_current_alarm_enabled", "set_current_alarm_enabled", "THRES:CUR:OVER:STAT"),
+    ("get_obr_alarm_enabled", "set_obr_alarm_enabled", "THRES:OBR:OVER:STAT"),
+    ("get_box_temp_alarm_enabled", "set_box_temp_alarm_enabled", "THRES:TEMP:BOX:STAT"),
+    ("get_fibre_chamber_alarm_enabled", "set_fibre_chamber_alarm_enabled", "THRES:TEMP:FC:STAT"),
+    ("get_voltage_alarm_enabled", "set_voltage_alarm_enabled", "THRES:VOLT:PS:STAT"),
+]
+
+
+@pytest.mark.parametrize("getter_name, setter_name, path", BOOL_CONFIG_PAIRS)
+def test_bool_config_getter(opened_device, mock_serial, getter_name, setter_name, path):
+    mock_serial.readline.side_effect = [b"1\r\n"]
+    assert getattr(opened_device, getter_name)() is True
+    mock_serial.write.assert_called_with(f":{path}?\r\n".encode("ascii"))
+
+
+@pytest.mark.parametrize("getter_name, setter_name, path", BOOL_CONFIG_PAIRS)
+def test_bool_config_setter(opened_device, mock_serial, getter_name, setter_name, path):
+    getattr(opened_device, setter_name)(True)
+    mock_serial.write.assert_called_with(f":{path} 1\r\n".encode("ascii"))
+
+
+FLOAT_CONFIG_PAIRS = [
+    ("get_ipd_level_dbm", "set_ipd_level_dbm", "THRES:POW:IN:LEV:SET1", -15.0),
+    ("get_opd_range_pct", "set_opd_range_pct", "THRES:POW:OUT:RANGE:SET1", 20.0),
+    ("get_opd_range_min_pct", "set_opd_range_min_pct", "THRES:POW:OUT:RANGE_MIN:SET1", 10.0),
+    ("get_opd_range_max_pct", "set_opd_range_max_pct", "THRES:POW:OUT:RANGE_MAX:SET1", 80.0),
+    ("get_opd_autostart_time_s", "set_opd_autostart_time_s", "THRES:POW:OUT:TIME", 60.0),
+    ("get_current_alarm_level_ma", "set_current_alarm_level_ma", "THRES:CUR:OVER:LEV:SET1", 280.0),
+    ("get_obr_alarm_level_dbm", "set_obr_alarm_level_dbm", "THRES:OBR:OVER:LEV:SET1", -15.0),
+    ("get_box_temp_min_degc", "set_box_temp_min_degc", "THRES:TEMP:BOX:MIN", 10.0),
+    ("get_box_temp_max_degc", "set_box_temp_max_degc", "THRES:TEMP:BOX:MAX", 60.0),
+    ("get_fibre_chamber_max_degc", "set_fibre_chamber_max_degc", "THRES:TEMP:FC:MAX", 50.0),
+]
+
+
+@pytest.mark.parametrize("getter_name, setter_name, path, value", FLOAT_CONFIG_PAIRS)
+def test_float_config_getter(opened_device, mock_serial, getter_name, setter_name, path, value):
+    mock_serial.readline.side_effect = [f"{value:e}\r\n".encode("ascii")]
+    assert getattr(opened_device, getter_name)() == pytest.approx(value)
+    mock_serial.write.assert_called_with(f":{path}?\r\n".encode("ascii"))
+
+
+@pytest.mark.parametrize("getter_name, setter_name, path, value", FLOAT_CONFIG_PAIRS)
+def test_float_config_setter(opened_device, mock_serial, getter_name, setter_name, path, value):
+    getattr(opened_device, setter_name)(value)
+    mock_serial.write.assert_called_with(f":{path} {value:g}\r\n".encode("ascii"))
+
+
+def test_get_ipd_active_rejects_out_of_range_channel(opened_device):
+    with pytest.raises(AEDFACommandError):
+        opened_device.get_ipd_active(channel=9)
+
+
+def test_get_ipd_active_queries_expected_path(opened_device, mock_serial):
+    mock_serial.readline.side_effect = [b"1\r\n"]
+    assert opened_device.get_ipd_active(channel=1) is True
+    mock_serial.write.assert_called_with(b":THRES:POW:IN:ACT:CH1?\r\n")
+
+
+def test_get_opd_reference_mw_queries_expected_path(opened_device, mock_serial):
+    mock_serial.readline.side_effect = [b"3.000000e+02\r\n"]
+    assert opened_device.get_opd_reference_mw() == pytest.approx(300.0)
+    mock_serial.write.assert_called_with(b":THRES:POW:OUT:REF:SET1?\r\n")
+
+
+def test_can_unlock_tec_overheat_queries_expected_path(opened_device, mock_serial):
+    mock_serial.readline.side_effect = [b"1\r\n"]
+    assert opened_device.can_unlock_tec_overheat() is True
+    mock_serial.write.assert_called_with(b":THRES:TEMP:TEC:OVER:UNLOCK?\r\n")
+
+
+def test_unlock_tec_overheat_sends_expected_command(opened_device, mock_serial):
+    opened_device.unlock_tec_overheat()
+    mock_serial.write.assert_called_with(b":THRES:TEMP:TEC:OVER:UNLOCK 1\r\n")

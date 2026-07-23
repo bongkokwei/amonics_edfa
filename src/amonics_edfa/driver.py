@@ -283,3 +283,172 @@ class AEDFA:
         """Get the power supply voltage alarm flag."""
         suffix = ":LATCH" if latched else ""
         return self._query_bool(f"SENS:THRES:ALARM:VOLT:PS{suffix}")
+
+    # --- Input power / seed (IPD) ---
+
+    def get_ipd_active(self, channel: int) -> bool:
+        """Check whether Input Power Detection has disabled the specified channel."""
+        self._validate_channel(channel, self.n_power_in_channels, "input power")
+        return self._query_bool(f"THRES:POW:IN:ACT:CH{channel}")
+
+    def get_ipd_enabled(self) -> bool:
+        """Get whether Input Power Detection is enabled."""
+        return self._query_bool("THRES:POW:IN:STAT:SET1")
+
+    def set_ipd_enabled(self, enabled: bool) -> None:
+        """Enable or disable Input Power Detection."""
+        self._set_value("THRES:POW:IN:STAT:SET1", enabled)
+
+    def get_ipd_level_dbm(self) -> float:
+        """Get the Input Power Detection threshold level (dBm)."""
+        return self._query_float("THRES:POW:IN:LEV:SET1")
+
+    def set_ipd_level_dbm(self, value: float) -> None:
+        """Set the Input Power Detection threshold level (dBm)."""
+        self._set_value("THRES:POW:IN:LEV:SET1", value)
+
+    # --- Output power (OPD) ---
+
+    def get_opd_enabled(self) -> bool:
+        """Get whether Output Power Detection is enabled."""
+        return self._query_bool("THRES:POW:OUT:STAT:SET1")
+
+    def set_opd_enabled(self, enabled: bool) -> None:
+        """Enable or disable Output Power Detection."""
+        self._set_value("THRES:POW:OUT:STAT:SET1", enabled)
+
+    def get_opd_range_pct(self) -> float:
+        """Get the Output Power Detection range (% of reference power)."""
+        return self._query_float("THRES:POW:OUT:RANGE:SET1")
+
+    def set_opd_range_pct(self, value: float) -> None:
+        """Set the Output Power Detection range (% of reference power)."""
+        self._set_value("THRES:POW:OUT:RANGE:SET1", value)
+
+    def get_opd_range_min_pct(self) -> float:
+        """Get the minimum allowed Output Power Detection range (%)."""
+        return self._query_float("THRES:POW:OUT:RANGE_MIN:SET1")
+
+    def set_opd_range_min_pct(self, value: float) -> None:
+        """Set the minimum allowed Output Power Detection range (%)."""
+        self._set_value("THRES:POW:OUT:RANGE_MIN:SET1", value)
+
+    def get_opd_range_max_pct(self) -> float:
+        """Get the maximum allowed Output Power Detection range (%)."""
+        return self._query_float("THRES:POW:OUT:RANGE_MAX:SET1")
+
+    def set_opd_range_max_pct(self, value: float) -> None:
+        """Set the maximum allowed Output Power Detection range (%)."""
+        self._set_value("THRES:POW:OUT:RANGE_MAX:SET1", value)
+
+    def get_opd_reference_mw(self) -> float:
+        """Get the Output Power Detection reference power (mW)."""
+        return self._query_float("THRES:POW:OUT:REF:SET1")
+
+    def get_opd_autostart_time_s(self) -> float:
+        """Get the Output Power Detection auto-start time (s)."""
+        return self._query_float("THRES:POW:OUT:TIME")
+
+    def set_opd_autostart_time_s(self, value: float) -> None:
+        """Set the Output Power Detection auto-start time (s)."""
+        self._set_value("THRES:POW:OUT:TIME", value)
+
+    # --- Current alarm ---
+
+    def get_current_alarm_enabled(self) -> bool:
+        """Get whether the over-current alarm is enabled."""
+        return self._query_bool("THRES:CUR:OVER:STAT")
+
+    def set_current_alarm_enabled(self, enabled: bool) -> None:
+        """Enable or disable the over-current alarm."""
+        self._set_value("THRES:CUR:OVER:STAT", enabled)
+
+    def get_current_alarm_level_ma(self) -> float:
+        """Get the over-current alarm threshold (mA)."""
+        return self._query_float("THRES:CUR:OVER:LEV:SET1")
+
+    def set_current_alarm_level_ma(self, value: float) -> None:
+        """Set the over-current alarm threshold (mA)."""
+        self._set_value("THRES:CUR:OVER:LEV:SET1", value)
+
+    # --- Output back reflection (OBR) ---
+
+    def get_obr_alarm_enabled(self) -> bool:
+        """Get whether the OBR alarm is enabled."""
+        return self._query_bool("THRES:OBR:OVER:STAT")
+
+    def set_obr_alarm_enabled(self, enabled: bool) -> None:
+        """Enable or disable the OBR alarm."""
+        self._set_value("THRES:OBR:OVER:STAT", enabled)
+
+    def get_obr_alarm_level_dbm(self) -> float:
+        """Get the OBR alarm threshold (dBm)."""
+        return self._query_float("THRES:OBR:OVER:LEV:SET1")
+
+    def set_obr_alarm_level_dbm(self, value: float) -> None:
+        """Set the OBR alarm threshold (dBm)."""
+        self._set_value("THRES:OBR:OVER:LEV:SET1", value)
+
+    # --- Case temperature ---
+
+    def get_box_temp_alarm_enabled(self) -> bool:
+        """Get whether the case temperature alarm is enabled."""
+        return self._query_bool("THRES:TEMP:BOX:STAT")
+
+    def set_box_temp_alarm_enabled(self, enabled: bool) -> None:
+        """Enable or disable the case temperature alarm."""
+        self._set_value("THRES:TEMP:BOX:STAT", enabled)
+
+    def get_box_temp_min_degc(self) -> float:
+        """Get the minimum case temperature alarm threshold (deg C)."""
+        return self._query_float("THRES:TEMP:BOX:MIN")
+
+    def set_box_temp_min_degc(self, value: float) -> None:
+        """Set the minimum case temperature alarm threshold (deg C)."""
+        self._set_value("THRES:TEMP:BOX:MIN", value)
+
+    def get_box_temp_max_degc(self) -> float:
+        """Get the maximum case temperature alarm threshold (deg C)."""
+        return self._query_float("THRES:TEMP:BOX:MAX")
+
+    def set_box_temp_max_degc(self, value: float) -> None:
+        """Set the maximum case temperature alarm threshold (deg C)."""
+        self._set_value("THRES:TEMP:BOX:MAX", value)
+
+    # --- Fibre chamber temperature ---
+
+    def get_fibre_chamber_alarm_enabled(self) -> bool:
+        """Get whether the fibre chamber temperature alarm is enabled."""
+        return self._query_bool("THRES:TEMP:FC:STAT")
+
+    def set_fibre_chamber_alarm_enabled(self, enabled: bool) -> None:
+        """Enable or disable the fibre chamber temperature alarm."""
+        self._set_value("THRES:TEMP:FC:STAT", enabled)
+
+    def get_fibre_chamber_max_degc(self) -> float:
+        """Get the maximum fibre chamber temperature alarm threshold (deg C)."""
+        return self._query_float("THRES:TEMP:FC:MAX")
+
+    def set_fibre_chamber_max_degc(self, value: float) -> None:
+        """Set the maximum fibre chamber temperature alarm threshold (deg C)."""
+        self._set_value("THRES:TEMP:FC:MAX", value)
+
+    # --- TEC overheat unlock ---
+
+    def can_unlock_tec_overheat(self) -> bool:
+        """Check whether lasers can be unlocked from a TEC overheat event."""
+        return self._query_bool("THRES:TEMP:TEC:OVER:UNLOCK")
+
+    def unlock_tec_overheat(self) -> None:
+        """Unlock lasers after a TEC overheat event has cleared."""
+        self._set_value("THRES:TEMP:TEC:OVER:UNLOCK", True)
+
+    # --- Supply voltage alarm ---
+
+    def get_voltage_alarm_enabled(self) -> bool:
+        """Get whether the power supply voltage alarm is enabled."""
+        return self._query_bool("THRES:VOLT:PS:STAT")
+
+    def set_voltage_alarm_enabled(self, enabled: bool) -> None:
+        """Enable or disable the power supply voltage alarm."""
+        self._set_value("THRES:VOLT:PS:STAT", enabled)
