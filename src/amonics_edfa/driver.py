@@ -44,7 +44,6 @@ class AEDFA:
         self.n_box_temp_channels: int = 0
         self.n_fibre_chamber_temp_channels: int = 0
         self.n_tec_channels: int = 0
-        self.n_voltage_channels: int = 0
 
     def open(self) -> None:
         """Open the serial port and discover the device's channel/mode capabilities."""
@@ -83,7 +82,6 @@ class AEDFA:
         self.n_box_temp_channels = self._query_int("READ:CH:TEMP:BOX")
         self.n_fibre_chamber_temp_channels = self._query_int("READ:CH:TEMP:FC")
         self.n_tec_channels = self._query_int("READ:CH:TEMP:TEC")
-        self.n_voltage_channels = self._query_int("READ:CH:VOLT:PS")
 
     def _throttle(self) -> None:
         elapsed = time.monotonic() - self._last_write_time
