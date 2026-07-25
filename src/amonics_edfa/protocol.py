@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from .exceptions import AEDFAProtocolError
+
+log = logging.getLogger(__name__)
 
 
 def _format_value(value: bool | int | float | str) -> str:
@@ -30,6 +34,7 @@ def parse_float(raw: str) -> float:
     try:
         return float(stripped)
     except ValueError as exc:
+        log.warning("Unparseable float reply: %r", stripped)
         raise AEDFAProtocolError(f"Expected a decimal number, got {stripped!r}") from exc
 
 
@@ -39,6 +44,7 @@ def parse_int(raw: str) -> int:
     try:
         return int(stripped)
     except ValueError as exc:
+        log.warning("Unparseable integer reply: %r", stripped)
         raise AEDFAProtocolError(f"Expected an integer, got {stripped!r}") from exc
 
 

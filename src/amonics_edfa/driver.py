@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from collections import namedtuple
 from enum import IntEnum
@@ -10,6 +11,8 @@ import serial
 
 from .exceptions import AEDFACommandError, AEDFAError, AEDFAProtocolError, AEDFATimeoutError
 from .protocol import build_query, build_set, parse_bool, parse_float, parse_int, parse_str
+
+log = logging.getLogger(__name__)
 
 MIN_COMMAND_INTERVAL_S = 0.05
 
@@ -48,6 +51,7 @@ class AEDFA:
 
     def open(self) -> None:
         """Open the serial port and discover the device's channel/mode capabilities."""
+        log.info("Opening %s at %d baud", self.port, self.baudrate)
         self._serial = serial.Serial(
             port=self.port,
             baudrate=self.baudrate,
@@ -61,6 +65,7 @@ class AEDFA:
     def close(self) -> None:
         """Close the serial port, if open."""
         if self._serial is not None:
+            log.info("Closing %s", self.port)
             self._serial.close()
             self._serial = None
 
@@ -84,6 +89,14 @@ class AEDFA:
         self.n_fibre_chamber_temp_channels = self._discover_channel_count("READ:CH:TEMP:FC")
         self.n_tec_channels = self._discover_channel_count("READ:CH:TEMP:TEC")
         self.n_voltage_channels = self._discover_channel_count("READ:CH:VOLT:PS")
+        log.info(
+            "Discovered modes=%s driving=%d current=%d power_in=%d power_out=%d",
+            self.modes,
+            self.n_driving_channels,
+            self.n_current_channels,
+            self.n_power_in_channels,
+            self.n_power_out_channels,
+        )
 
     def _discover_channel_count(self, path: str) -> int:
         """Query a READ:CH:* capability count, defaulting to 0 if this device doesn't
@@ -92,7 +105,8 @@ class AEDFA:
         non-numeric reply rather than staying silent, so both failure modes count."""
         try:
             return self._query_int(path)
-        except (AEDFATimeoutError, AEDFAProtocolError):
+        except (AEDFATimeoutError, AEDFAProtocolError) as exc:
+            log.debug("Capability %s unsupported (%s), assuming 0 channels", path, exc)
             return 0
 
     def _throttle(self) -> None:
@@ -102,8 +116,10 @@ class AEDFA:
 
     def _write(self, data: bytes) -> None:
         if self._serial is None:
+            log.error("Write attempted on a closed device: %r", data)
             raise AEDFAError("Device is not open. Call open() first.")
         self._throttle()
+        log.debug("TX %r", data)
         self._serial.write(data)
         self._last_write_time = time.monotonic()
 
@@ -111,7 +127,9 @@ class AEDFA:
         self._write(build_query(path))
         raw = self._serial.readline()
         if not raw:
+            log.warning("Timed out waiting for a reply to ':%s?'", path)
             raise AEDFATimeoutError(f"No reply to query ':{path}?'")
+        log.debug("RX %r", raw)
         return raw.decode("ascii")
 
     def _query_str(self, path: str) -> str:
@@ -127,20 +145,24 @@ class AEDFA:
         return parse_bool(self._query_raw(path))
 
     def _set_value(self, path: str, value: bool | int | float | str) -> None:
+        log.info("SET %s = %r", path, value)
         self._write(build_set(path, value))
 
     def _validate_channel(self, channel: int, count: int, label: str) -> None:
         if not (1 <= channel <= count):
+            log.error("Rejected %s channel %d (device has %d)", label, channel, count)
             raise AEDFACommandError(
                 f"{label} channel {channel} not available on this device (has {count})"
             )
 
     def _validate_supported(self, count: int, label: str) -> None:
         if count < 1:
+            log.error("Rejected command: %s not available on this device", label)
             raise AEDFACommandError(f"{label} not available on this device")
 
     def _validate_mode(self, mode: str) -> None:
         if mode not in self.modes:
+            log.error("Rejected mode %r (available: %s)", mode, self.modes)
             raise AEDFACommandError(f"Mode {mode!r} not supported (available: {self.modes})")
 
     def _resolve_mode(self, channel: int, mode: str | None) -> str:
