@@ -7,12 +7,15 @@ connections, and telemetry is pushed back to the GUI on a timer.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal, pyqtSlot
 
 from .driver import AEDFA, ChannelStatus
 from .exceptions import AEDFAError
+
+log = logging.getLogger(__name__)
 
 DEFAULT_POLL_INTERVAL_MS = 1000
 
@@ -79,6 +82,7 @@ class AmpWorker(QObject):
     @pyqtSlot()
     def start(self) -> None:
         """Create the poll timer. Runs once, on the worker thread."""
+        log.info("Worker started, poll interval %d ms", self._interval_ms)
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.setInterval(self._interval_ms)
@@ -87,6 +91,7 @@ class AmpWorker(QObject):
     @pyqtSlot()
     def stop(self) -> None:
         """Close the port and tear down. Runs on the worker thread at shutdown."""
+        log.info("Worker stopping")
         if self._timer is not None:
             self._timer.stop()
         self._close_port()
@@ -94,17 +99,21 @@ class AmpWorker(QObject):
     @pyqtSlot(str)
     def open_device(self, port: str) -> None:
         if self._amp is not None:
+            log.debug("open_device(%s) ignored, already connected", port)
             return
+        log.info("Connecting to %s", port)
         self.busy.emit(True)
         try:
             amp = AEDFA(port=port)
             amp.open()
         except (AEDFAError, OSError, ValueError) as exc:
+            log.error("Connection to %s failed: %s", port, exc)
             self._amp = None
             self.command_failed.emit("Connection failed", str(exc))
             self.busy.emit(False)
             return
         self._amp = amp
+        log.info("Connected to %s", port)
         self.busy.emit(False)
         self.connected.emit(
             Capabilities(
@@ -122,6 +131,7 @@ class AmpWorker(QObject):
 
     @pyqtSlot()
     def close_device(self) -> None:
+        log.info("Disconnecting")
         if self._timer is not None:
             self._timer.stop()
         self._close_port()
@@ -132,14 +142,15 @@ class AmpWorker(QObject):
             return
         try:
             self._amp.close()
-        except (AEDFAError, OSError):
-            pass
+        except (AEDFAError, OSError) as exc:
+            log.warning("Error while closing the port, ignoring: %s", exc)
         self._amp = None
 
     # -- configuration -----------------------------------------------------
 
     @pyqtSlot(int)
     def set_channel(self, channel: int) -> None:
+        log.info("Selected channel %d", channel)
         self._channel = channel
         if self._amp is not None:
             self.refresh_limits()
@@ -147,6 +158,7 @@ class AmpWorker(QObject):
 
     @pyqtSlot(int)
     def set_poll_interval(self, interval_ms: int) -> None:
+        log.info("Poll interval set to %d ms", interval_ms)
         self._interval_ms = interval_ms
         if self._timer is not None:
             self._timer.setInterval(interval_ms)
@@ -155,6 +167,8 @@ class AmpWorker(QObject):
 
     @pyqtSlot(str)
     def set_mode(self, mode: str) -> None:
+        log.info("Requesting mode %s on channel %d", mode, self._channel)
+
         def action(amp: AEDFA) -> None:
             amp.set_mode(mode, channel=self._channel)
 
@@ -164,6 +178,8 @@ class AmpWorker(QObject):
 
     @pyqtSlot(float)
     def set_setpoint(self, value: float) -> None:
+        log.info("Requesting setpoint %g on channel %d", value, self._channel)
+
         def action(amp: AEDFA) -> None:
             amp.set_current_setpoint(channel=self._channel, value_ma=value)
 
@@ -173,6 +189,8 @@ class AmpWorker(QObject):
 
     @pyqtSlot(bool)
     def set_output(self, on: bool) -> None:
+        log.info("Requesting output %s on channel %d", "ON" if on else "OFF", self._channel)
+
         def action(amp: AEDFA) -> None:
             if on:
                 amp.set_channel_status(channel=self._channel, on=True)
@@ -186,6 +204,7 @@ class AmpWorker(QObject):
 
     @pyqtSlot()
     def unlock_interlock(self) -> None:
+        log.info("Requesting interlock unlock")
         if self._run("Interlock unlock failed", lambda amp: amp.unlock_interlock()):
             self._poll()
 
@@ -198,12 +217,22 @@ class AmpWorker(QObject):
             mode = amp.get_mode(channel=self._channel)
             bounds = amp.get_current_limits(channel=self._channel, mode=mode)
         except (AEDFAError, OSError, ValueError) as exc:
+            log.warning("Could not read limits for channel %d: %s", self._channel, exc)
             self.poll_failed.emit(str(exc))
             return
         try:
             setpoint = amp.get_current_setpoint(channel=self._channel, mode=mode)
-        except (AEDFAError, OSError, ValueError):
+        except (AEDFAError, OSError, ValueError) as exc:
+            log.warning("Could not read setpoint for channel %d: %s", self._channel, exc)
             setpoint = None
+        log.debug(
+            "Limits: mode=%s min=%g max=%g step=%g setpoint=%s",
+            mode,
+            bounds.min_ma,
+            bounds.max_ma,
+            bounds.step_ma,
+            setpoint,
+        )
         self.limits.emit(
             Limits(
                 mode=mode,
@@ -218,6 +247,7 @@ class AmpWorker(QObject):
         """Run a driver call, reporting failures to the GUI instead of raising."""
         amp = self._amp
         if amp is None:
+            log.debug("%r skipped, not connected", title)
             return False
         if self._timer is not None:
             self._timer.stop()
@@ -226,6 +256,7 @@ class AmpWorker(QObject):
             action(amp)
             return True
         except (AEDFAError, OSError, ValueError) as exc:
+            log.error("%s: %s", title, exc)
             self.command_failed.emit(title, str(exc))
             return False
         finally:
@@ -250,6 +281,7 @@ class AmpWorker(QObject):
             try:
                 readings[name] = fn()
             except (AEDFAError, ValueError) as exc:
+                log.debug("Reading %r failed: %s", name, exc)
                 readings[name] = None
                 errors.append(str(exc))
 
@@ -263,13 +295,16 @@ class AmpWorker(QObject):
             read("box_temp_c", amp.get_box_temp_degc)
             read("interlock", amp.get_interlock)
         except OSError as exc:  # the port went away underneath us
+            log.error("Connection lost while polling: %s", exc)
             self.command_failed.emit("Connection lost", str(exc))
             self.close_device()
             return
 
+        log.debug("Poll: %s", readings)
         self.telemetry.emit(Telemetry(**readings))  # type: ignore[arg-type]
 
         if errors:
+            log.warning("Poll finished with %d error(s), first: %s", len(errors), errors[0])
             self.poll_failed.emit(errors[0])
         self._rearm()
 

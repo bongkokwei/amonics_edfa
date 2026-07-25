@@ -6,6 +6,8 @@ so readings update by themselves and the window never freezes on a slow reply.
 
 from __future__ import annotations
 
+import logging
+import os
 import sys
 from datetime import datetime
 
@@ -33,6 +35,8 @@ from serial.tools import list_ports
 
 from .driver import ChannelStatus
 from .worker import AmpWorker, Capabilities, Limits, Telemetry
+
+log = logging.getLogger(__name__)
 
 POLL_INTERVALS = [("0.5 s", 500), ("1 s", 1000), ("2 s", 2000), ("5 s", 5000)]
 
@@ -222,6 +226,7 @@ class MainWindow(QMainWindow):
         self.output_on = False
         self.busy = False
 
+        log.info("Opening the control panel")
         self._build_ui()
         self._start_worker()
         self.refresh_ports()
@@ -429,6 +434,7 @@ class MainWindow(QMainWindow):
         self.worker.poll_failed.connect(self.on_poll_failed)
         self.worker.busy.connect(self.on_busy)
 
+        log.debug("Starting the worker thread")
         self.thread.start()
 
     # -- actions -----------------------------------------------------------
@@ -439,16 +445,20 @@ class MainWindow(QMainWindow):
         self.port_combo.addItems(sorted(port.device for port in list_ports.comports()))
         if current:
             self.port_combo.setCurrentText(current)
+        log.info("Port scan found %d serial port(s)", self.port_combo.count())
         self.status_message.setText(f"{self.port_combo.count()} serial port(s) found")
 
     def toggle_connection(self) -> None:
         if self.connected:
+            log.info("Disconnect requested")
             self.request_close.emit()
             return
         port = self.port_combo.currentText().strip()
         if not port:
+            log.warning("Connect requested with no port selected")
             QMessageBox.warning(self, "No port", "Select or type a serial port first.")
             return
+        log.info("Connect requested for %s", port)
         self.connection_pill.set_state("Connecting...", "warn")
         self.request_channel.emit(self.channel_spin.value())
         self.request_interval.emit(self.interval_combo.currentData())
@@ -465,12 +475,15 @@ class MainWindow(QMainWindow):
                 QMessageBox.StandardButton.No,
             )
             if confirm != QMessageBox.StandardButton.Yes:
+                log.info("Output enable cancelled at the confirmation dialog")
                 return
+        log.info("Output %s requested from the panel", "ON" if turning_on else "OFF")
         self.request_output.emit(turning_on)
 
     # -- worker callbacks --------------------------------------------------
 
     def on_connected(self, caps: Capabilities) -> None:
+        log.info("Panel connected to %s, modes %s", caps.port, caps.modes)
         self.connected = True
         self.connect_button.setText("Disconnect")
         self._set_button_style(self.connect_button, "")
@@ -486,6 +499,7 @@ class MainWindow(QMainWindow):
         self._apply_enabled_state()
 
     def on_disconnected(self) -> None:
+        log.info("Panel disconnected")
         self.connected = False
         self.output_on = False
         self.connect_button.setText("Connect")
@@ -504,6 +518,7 @@ class MainWindow(QMainWindow):
         self._apply_enabled_state()
 
     def on_telemetry(self, data: Telemetry) -> None:
+        log.debug("Telemetry received: %s", data)
         self.output_tile.set_value(_fmt(data.output_mw))
         self.input_tile.set_value(_fmt(data.input_mw))
         self.current_tile.set_value(_fmt(data.current_ma, 1))
@@ -539,6 +554,7 @@ class MainWindow(QMainWindow):
         self.updated_label.setText(f"Updated {datetime.now():%H:%M:%S}")
 
     def on_limits(self, limits: Limits) -> None:
+        log.debug("Limits received: %s", limits)
         unit = "mA" if limits.mode == "ACC" else "mW"
         self.setpoint_label.setText(f"Setpoint ({unit})")
         self.setpoint_spin.blockSignals(True)
@@ -551,15 +567,18 @@ class MainWindow(QMainWindow):
         self.limits_label.setText(f"Allowed {limits.min_value:g} - {limits.max_value:g} {unit}")
 
     def on_command_failed(self, title: str, message: str) -> None:
+        log.error("%s: %s", title, message)
         if not self.connected:
             self.connection_pill.set_state("Disconnected", "idle")
         self.status_message.setText(f"{title}: {message}")
         QMessageBox.critical(self, title, message)
 
     def on_poll_failed(self, message: str) -> None:
+        log.warning("Read warning: %s", message)
         self.status_message.setText(f"Read warning: {message}")
 
     def on_busy(self, busy: bool) -> None:
+        log.debug("Busy: %s", busy)
         self.busy = busy
         self._apply_enabled_state()
 
@@ -589,6 +608,7 @@ class MainWindow(QMainWindow):
         button.style().polish(button)
 
     def closeEvent(self, event) -> None:
+        log.info("Closing the control panel")
         self.request_stop.emit()
         self.thread.quit()
         self.thread.wait(3000)
@@ -600,6 +620,10 @@ def _fmt(value: float | None, decimals: int = 2) -> str:
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=os.environ.get("AEDFA_LOG_LEVEL", "INFO").upper(),
+        format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+    )
     app = QApplication(sys.argv)
     app.setApplicationName("Amonics AEDFA Control")
     window = MainWindow()
