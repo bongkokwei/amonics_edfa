@@ -13,6 +13,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-mock"]
+gui = ["PyQt6"]
+
+[project.scripts]
+amonics-edfa-gui = "amonics_edfa.gui:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
