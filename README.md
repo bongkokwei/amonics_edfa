@@ -23,6 +23,19 @@ with AEDFA(port="COM8") as amp:
 
 See `examples/basic_control.py` for a complete example.
 
+## GUI
+
+```bash
+pip install -e ".[gui]" --break-system-packages
+amonics-edfa-gui
+```
+
+The control panel picks the serial port, switches the channel between ACC and APC, sets the
+set-point (clamped to the limits the amplifier reports) and arms the optical output. All serial
+traffic runs on a background thread, so readings — output/input power, pump current, case
+temperature, output and interlock state — refresh on their own at the interval chosen in the
+panel (0.5–5 s) and the window stays responsive while a command is in flight.
+
 ## Testing
 
 ```bash
